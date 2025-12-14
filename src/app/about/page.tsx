@@ -5,7 +5,7 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { MapPin,  CheckCircle2, Quote, Play, Check, Users, Trophy, ArrowRight } from 'lucide-react';
 import Footer from '../section/Footer';
-
+import Image from 'next/image';
 gsap.registerPlugin(ScrollTrigger);
 
 // --- 1. HELPER: TEXT PRESSURE (Cinematic Title) ---
@@ -200,7 +200,7 @@ export default function AboutPage() {
       <section className="hero-section relative h-screen flex items-center justify-center overflow-hidden border-b border-white/5">
         <div className="absolute inset-0 z-0 hero-img opacity-40">
            <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-[#050505] z-10"></div>
-           <img 
+           <Image
              src="/img/g2.jpg" 
              alt="Hockey History" 
              className="w-full h-full object-cover  brightness-50"
@@ -275,10 +275,9 @@ export default function AboutPage() {
                     </div>
                     <div className="order-1 md:order-2 relative h-[40vh] md:h-[50vh] w-full overflow-hidden rounded-lg shadow-2xl group">
                         <div className="absolute inset-0 bg-[#D52B1E] mix-blend-multiply opacity-20 group-hover:opacity-0 transition-all duration-500"></div>
-                        <img 
+                        <Image
                              src="/img/ab1.jpg"
                               alt="Hockey Rink"
-    fill
     className="object-cover scale-110 group-hover:scale-100 transition-transform duration-700"
     sizes="(max-width: 768px) 100vw, 50vw"
     priority={false}
@@ -291,7 +290,7 @@ export default function AboutPage() {
             <div className="panel w-full md:w-[100vw] h-auto md:h-screen flex items-center justify-center relative border-b md:border-b-0 md:border-r border-white/5 bg-[#0e0e0e] py-16 md:py-0 px-6 md:px-0">
                  <div className="w-full max-w-7xl grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
                     <div className="relative h-[40vh] md:h-[50vh] w-full overflow-hidden rounded-lg shadow-2xl">
-                         <img 
+                         <Image 
                               src="/img/g7.jpg"
     alt="Hockey Rink"
     fill
@@ -356,7 +355,7 @@ export default function AboutPage() {
             <div className="relative group order-2 lg:order-1">
                  {/* Floating Image Effect */}
                  <div className="relative aspect-[4/5] overflow-hidden rounded-sm  transition-all duration-700 ease-out border-2 border-white/5 group-hover:border-[#D52B1E]/50">
-                    <img 
+                    <Image 
                      src="/img/g2.jpg"
     alt="Hockey Rink"
     fill
