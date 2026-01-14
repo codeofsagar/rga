@@ -126,8 +126,8 @@ export default function AboutCoachPage() {
                         <div className="bg-white/5 p-6 border-l-2 border-[#0039A6] rounded-r-lg">
                             <h4 className="text-white font-bold uppercase text-sm tracking-widest mb-3">Experience</h4>
                             <p className="text-sm text-gray-300">
-                                Coached goalies on the Kazan women&apos;s team and elite goaltenders playing in: 
-                                <span className="text-white font-medium block mt-2 text-sm tracking-wide">KHL • VHL • MHL • Junior A • AAA</span>
+                                Provided goaltending coaching to elite athletes and women’s teams competing across 
+                                <span className="text-white font-medium block mt-2 text-sm tracking-wide">KHL, VHL, MHL, Junior A, and AAA levels.</span>
                             </p>
                         </div>
                         

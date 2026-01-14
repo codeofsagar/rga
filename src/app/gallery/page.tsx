@@ -1,278 +1,187 @@
-"use client";
+'use client';
 
-import { useEffect, useRef } from "react";
-import gsap from "gsap";
-import "./Gallery.css";
+import { useState, useEffect } from 'react';
+import { db } from '../lib/firebase';
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { X, ZoomIn, Loader, Camera, AlignLeft } from 'lucide-react';
+import Image from 'next/image';
+import Navbar from '../components/Navbar';
+import Footer from '../section/Footer';
 
+// Define the data structure
 interface GalleryItem {
-  name: string;
-  image: string;
+  id: string;
+  imageUrl: string;
+  description: string;
 }
 
-interface GalleryProps {
-  items?: GalleryItem[];
-}
+export default function GalleryPage() {
+  const [items, setItems] = useState<GalleryItem[]>([]);
+  const [selectedItem, setSelectedItem] = useState<GalleryItem | null>(null);
+  const [loading, setLoading] = useState(true);
 
-const DEFAULT_ITEMS: GalleryItem[] = [
-  { image: "/img/g1.webp", name: "Velvet" },
-  { image: "/img/g2.jpg", name: "Glass Relay" },
-  { image: "/img/g3.jpg", name: "Noir-17" },
-  { image: "/img/g4.jpg", name: "Driftline" },
-  { image: "/img/g5.jpg", name: "Pulse 9" },
-  { image: "/img/g6.jpg", name: "Cold Meridian" },
-  { image: "/img/g7.jpg", name: "Astra" },
-  { image: "/img/g8.jpg", name: "Mono Circuit" },
-  { image: "/img/g9.jpg", name: "Lumen-04" },
-  { image: "/img/g10.jpg", name: "Shadow Bloom" },
-  { image: "/img/b1.jpeg", name: "Shadow Bloom" },
-  { image: "/img/b2.jpeg", name: "Shadow Bloom" },
-  { image: "/img/b3.jpeg", name: "Shadow Bloom" },
-  { image: "/img/b4.jpeg", name: "Shadow Bloom" },
-  { image: "/img/b5.jpeg", name: "Shadow Bloom" },
-  { image: "/img/b6.jpeg", name: "Shadow Bloom" },
-  { image: "/img/b8.jpeg", name: "Shadow Bloom" },
-  { image: "/img/b9.jpeg", name: "Shadow Bloom" },
-  
-];
-
-export default function Gallery({ items = DEFAULT_ITEMS }: GalleryProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const previewRef = useRef<HTMLDivElement>(null);
-  const titleRef = useRef<HTMLDivElement>(null);
-
-  const state = useRef({
-    currentIndicatorRotation: 0,
-    targetIndicatorRotation: 0,
-    currentSpinnerRotation: 0,
-    targetSpinnerRotation: 0,
-    lastTime: 0,
-    lastSegmentIndex: -1,
-  });
-
+  // --- 1. REAL-TIME DATA FETCH ---
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    const q = query(collection(db, "gallery"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (snap) => {
+      setItems(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as GalleryItem)));
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
-    const container = containerRef.current;
-    if (!container) return;
-
-    const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-
-    const createSVG = (type: string, attrs: Record<string, string | number> = {}) => {
-      const el = document.createElementNS("http://www.w3.org/2000/svg", type);
-      Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, String(v)));
-      return el;
-    };
-
-    let svg: SVGSVGElement | null = null;
-    let animationFrameId: number;
-
-    const buildInterface = () => {
-      const existingSvg = container.querySelector(".gallery-svg-layer");
-      if (existingSvg) existingSvg.remove();
-
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      const isMobile = width < 768;
-
-      // --- RESPONSIVE CONFIGURATION ---
-      // If mobile, we use width as base to make it big enough for thumbs.
-      // If desktop, we keep it proportional but anchor to bottom.
-      const baseSize = isMobile ? width : Math.min(width, height);
-      
-      // Much larger radius logic since it's only a half-circle at the bottom
-      const outerRadius = isMobile ? baseSize * 0.45 : baseSize * 0.35; 
-      const innerRadius = isMobile ? baseSize * 0.25 : baseSize * 0.20; 
-      // --------------------------
-
-      const centerX = width / 2;
-      // Anchor to the bottom of the viewport
-      const centerY = height; 
-
-      svg = createSVG("svg", { class: "gallery-svg-layer" }) as SVGSVGElement;
-      const defs = createSVG("defs");
-      svg.appendChild(defs);
-
-      const anglePerSegment = (2 * Math.PI) / items.length;
-
-      items.forEach((item, i) => {
-        // We start drawing from the bottom (-Math.PI/2 is top, so we adjust phases if needed)
-        // Standard circle math is fine, we just rotate the whole group later.
-        const startAngle = i * anglePerSegment - Math.PI / 2;
-        const endAngle = (i + 1) * anglePerSegment - Math.PI / 2;
-        const midAngle = (startAngle + endAngle) / 2;
-
-        const clipId = `clip-${i}`;
-        const clipPath = createSVG("clipPath", { id: clipId });
-        
-        const pathData = [
-          `M ${centerX + outerRadius * Math.cos(startAngle)} ${centerY + outerRadius * Math.sin(startAngle)}`,
-          `A ${outerRadius} ${outerRadius} 0 0 1 ${centerX + outerRadius * Math.cos(endAngle)} ${centerY + outerRadius * Math.sin(endAngle)}`,
-          `L ${centerX + innerRadius * Math.cos(endAngle)} ${centerY + innerRadius * Math.sin(endAngle)}`,
-          `A ${innerRadius} ${innerRadius} 0 0 0 ${centerX + innerRadius * Math.cos(startAngle)} ${centerY + innerRadius * Math.sin(startAngle)}`,
-          "Z"
-        ].join(" ");
-
-        clipPath.appendChild(createSVG("path", { d: pathData }));
-        defs.appendChild(clipPath);
-
-        const g = createSVG("g", {
-          "clip-path": `url(#${clipId})`,
-          "data-segment": i,
-        });
-
-        const segmentRadius = (innerRadius + outerRadius) / 2;
-        const segmentX = centerX + Math.cos(midAngle) * segmentRadius;
-        const segmentY = centerY + Math.sin(midAngle) * segmentRadius;
-
-        // Image calculations
-        const arcLength = outerRadius * anglePerSegment;
-        const imgWidth = Math.max(arcLength * 1.5, 100); // Ensure minimum size
-        const imgHeight = Math.max((outerRadius - innerRadius) * 1.5, 100);
-        const rotation = (midAngle * 180) / Math.PI + 90;
-
-        const image = createSVG("image", {
-          href: item.image,
-          width: imgWidth,
-          height: imgHeight,
-          x: segmentX - imgWidth / 2,
-          y: segmentY - imgHeight / 2,
-          preserveAspectRatio: "xMidYMid slice",
-          transform: `rotate(${rotation} ${segmentX} ${segmentY})`,
-        });
-
-        g.appendChild(image);
-        svg!.appendChild(g);
-      });
-
-      // Indicator logic - Pointing UP from the bottom
-      const indicatorLen = 30;
-      const indicator = createSVG("line", {
-        class: "gallery-indicator",
-        id: "gallery-indicator-line",
-        x1: centerX,
-        y1: centerY - innerRadius + 10, // Start slightly inside inner circle
-        x2: centerX,
-        y2: centerY - outerRadius - 10, // Extend slightly beyond outer circle
-      });
-      svg.appendChild(indicator);
-
-      container.appendChild(svg);
-    };
-
-    const updateContent = () => {
-      if (!titleRef.current || !previewRef.current) return;
-
-      const s = state.current;
-      // Adjust rotation calculation because our visual "active" point is now at the top of the wheel (which is bottom of screen)
-      const relativeRotation = (((s.currentIndicatorRotation - s.currentSpinnerRotation) % 360) + 360) % 360;
-      
-      // Calculate index based on 360 degrees
-      const segmentIndex = Math.floor(relativeRotation / (360 / items.length)) % items.length;
-
-      if (segmentIndex !== s.lastSegmentIndex && items[segmentIndex]) {
-        s.lastSegmentIndex = segmentIndex;
-
-        titleRef.current.textContent = items[segmentIndex].name;
-
-        const img = document.createElement("img");
-        img.src = items[segmentIndex].image;
-        img.alt = items[segmentIndex].name;
-        
-        gsap.set(img, { opacity: 0 });
-        previewRef.current.appendChild(img);
-        gsap.to(img, { opacity: 1, duration: 0.5, ease: "power2.out" });
-
-        const allImages = previewRef.current.querySelectorAll("img");
-        if (allImages.length > 2) {
-            // Keep fewer images in DOM for performance
-            allImages[0].remove();
-        }
-      }
-    };
-
-    const animate = (time: number) => {
-      const s = state.current;
-      let deltaTime = (time - s.lastTime) / 1000;
-      s.lastTime = time;
-      deltaTime = Math.min(deltaTime, 0.1); 
-
-      s.targetIndicatorRotation += 10 * deltaTime; // Slower auto-rotation
-      s.targetSpinnerRotation -= 10 * 0.25 * deltaTime;
-
-      s.currentIndicatorRotation = lerp(s.currentIndicatorRotation, s.targetIndicatorRotation, 0.1);
-      s.currentSpinnerRotation = lerp(s.currentSpinnerRotation, s.targetSpinnerRotation, 0.1);
-
-      const centerX = window.innerWidth / 2;
-      const centerY = window.innerHeight; // Animate relative to bottom
-
-      const indicator = document.getElementById("gallery-indicator-line");
-      if (indicator) {
-        // Indicator rotates around the bottom center
-        indicator.setAttribute(
-          "transform",
-          `rotate(${s.currentIndicatorRotation % 360} ${centerX} ${centerY})`
-        );
-      }
-
-      if (svg) {
-        const segments = svg.querySelectorAll("[data-segment]");
-        segments.forEach((seg) => {
-          seg.setAttribute(
-            "transform",
-            `rotate(${s.currentSpinnerRotation % 360} ${centerX} ${centerY})`
-          );
-        });
-      }
-
-      updateContent();
-      animationFrameId = requestAnimationFrame(animate);
-    };
-
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const delta = e.deltaY * 0.1; // Increased sensitivity slightly
-      state.current.targetIndicatorRotation += delta;
-      state.current.targetSpinnerRotation -= delta;
-    };
-
-    // Touch support for mobile swiping
-    let startY = 0;
-    const handleTouchStart = (e: TouchEvent) => {
-        startY = e.touches[0].clientY;
-    };
-    const handleTouchMove = (e: TouchEvent) => {
-        const currentY = e.touches[0].clientY;
-        const delta = (startY - currentY) * 0.5;
-        state.current.targetIndicatorRotation += delta;
-        state.current.targetSpinnerRotation -= delta;
-        startY = currentY;
-    };
-
-    state.current.lastTime = performance.now();
-    buildInterface();
-    animationFrameId = requestAnimationFrame(animate);
-
-    window.addEventListener("wheel", handleWheel, { passive: false });
-    window.addEventListener("resize", buildInterface);
-    window.addEventListener("touchstart", handleTouchStart);
-    window.addEventListener("touchmove", handleTouchMove);
-
-    return () => {
-      window.removeEventListener("wheel", handleWheel);
-      window.removeEventListener("resize", buildInterface);
-      window.removeEventListener("touchstart", handleTouchStart);
-      window.removeEventListener("touchmove", handleTouchMove);
-      cancelAnimationFrame(animationFrameId);
-      if (svg) svg.remove();
-    };
-  }, [items]);
+  // Prevent scrolling when modal is open
+  useEffect(() => {
+    if (selectedItem) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+  }, [selectedItem]);
 
   return (
-    <div className="gallery-root">
-      <section className="gallery-container" ref={containerRef}>
-        <div className="gallery-preview-img" ref={previewRef}></div>
-       
+    <main className="bg-[#050505] min-h-screen flex flex-col text-white font-sans selection:bg-[#D52B1E] selection:text-white">
+      <Navbar />
+      
+      {/* --- HERO HEADER --- */}
+      <section className="pt-40 pb-16 px-6 text-center border-b border-white/10 relative overflow-hidden">
+          {/* Background Noise */}
+          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.05] pointer-events-none"></div>
+          
+          <div className="relative z-10">
+            <div className="inline-flex items-center gap-2 mb-4 px-3 py-1 border border-white/10 rounded-full bg-white/5">
+                <Camera size={14} className="text-[#D52B1E]" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Visual Archive</span>
+            </div>
+            <h1 className="text-5xl md:text-8xl font-black uppercase tracking-tighter mb-4">
+                The <span className="text-[#D52B1E]">Vault</span>
+            </h1>
+            <p className="text-gray-400 max-w-xl mx-auto font-light text-sm md:text-base uppercase tracking-widest leading-relaxed">
+                Moments from the crease. Capturing the intensity, discipline, and development of RGA Goaltending.
+            </p>
+          </div>
       </section>
-    </div>
+
+      {/* --- GALLERY GRID --- */}
+      <section className="flex-grow w-full max-w-[1600px] mx-auto px-4 md:px-8 py-12">
+        
+        {loading ? (
+            <div className="flex flex-col items-center justify-center py-32 opacity-50 gap-4">
+                <Loader className="animate-spin text-[#D52B1E]" size={40} />
+                <span className="text-xs uppercase tracking-widest font-mono">Loading Assets...</span>
+            </div>
+        ) : items.length === 0 ? (
+            <div className="text-center py-32 border border-dashed border-white/10 rounded-2xl bg-white/5">
+                <p className="text-gray-500 uppercase tracking-widest text-xs">No images in the archives yet.</p>
+            </div>
+        ) : (
+            // GRID LAYOUT
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {items.map((item) => (
+                    <div 
+                        key={item.id} 
+                        onClick={() => setSelectedItem(item)}
+                        className="group relative aspect-square overflow-hidden bg-[#111] cursor-pointer border border-white/5 hover:border-[#D52B1E]/50 transition-all duration-500 rounded-sm"
+                    >
+                        {/* Image */}
+                        <Image 
+                            src={item.imageUrl} 
+                            alt="Gallery Item" 
+                            fill 
+                            className="object-cover transition-transform duration-700 group-hover:scale-110 opacity-80 group-hover:opacity-100"
+                            sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
+                        />
+                        
+                        {/* Hover Gradient Overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center pb-6">
+                            <div className="flex items-center gap-2 text-white font-bold uppercase tracking-widest text-[10px] bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20">
+                                <ZoomIn size={12} className="text-[#D52B1E]" /> 
+                                View Intel
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        )}
+      </section>
+
+      {/* --- LIGHTBOX MODAL --- */}
+      {selectedItem && (
+        <div 
+            className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4 animate-in fade-in duration-300"
+            onClick={() => setSelectedItem(null)} // Close on backdrop click
+        >
+            
+            {/* Close Button */}
+            <button 
+                onClick={() => setSelectedItem(null)}
+                className="absolute top-6 right-6 p-3 bg-white/10 rounded-full hover:bg-[#D52B1E] hover:text-white transition-colors z-50 group"
+            >
+                <X size={24} className="group-hover:rotate-90 transition-transform" />
+            </button>
+
+            {/* Modal Content */}
+            <div 
+                className="max-w-7xl w-full h-[85vh] grid grid-cols-1 lg:grid-cols-12 gap-0 lg:gap-8 bg-[#0a0a0a] border border-white/10 rounded-2xl overflow-hidden shadow-2xl relative"
+                onClick={(e) => e.stopPropagation()} // Prevent closing when clicking content
+            >
+                
+                {/* Left: Image Container */}
+                <div className="lg:col-span-8 relative bg-black flex items-center justify-center h-[50vh] lg:h-full border-b lg:border-b-0 lg:border-r border-white/10">
+                    <div className="relative w-full h-full p-4">
+                        <Image 
+                            src={selectedItem.imageUrl} 
+                            alt="Selected View" 
+                            fill 
+                            className="object-contain"
+                            priority
+                        />
+                    </div>
+                </div>
+
+                {/* Right: Description Panel */}
+                <div className="lg:col-span-4 p-8 lg:p-12 flex flex-col h-full bg-[#0a0a0a] overflow-y-auto">
+                    
+                    {/* Decorative Header */}
+                    <div className="mb-8">
+                        <div className="flex items-center gap-3 mb-6 opacity-50">
+                            <div className="w-8 h-[1px] bg-white"></div>
+                            <span className="text-[10px] font-mono uppercase tracking-widest text-white">Archive Data</span>
+                        </div>
+                        
+                        <h3 className="text-2xl font-black uppercase text-white mb-2 leading-none">
+                            Image <span className="text-[#D52B1E]">Details</span>
+                        </h3>
+                    </div>
+
+                    {/* The Description */}
+                    <div className="flex-grow">
+                        <div className="flex gap-4">
+                            <AlignLeft size={20} className="text-[#D52B1E] flex-shrink-0 mt-1" />
+                            <p className="text-gray-300 font-light leading-relaxed text-sm md:text-base whitespace-pre-wrap">
+                                {selectedItem.description}
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Footer of Modal */}
+                    <div className="mt-8 pt-6 border-t border-white/10 flex justify-between items-end">
+                        <div>
+                            <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold">Encrypted</p>
+                            <p className="text-[10px] text-gray-600 uppercase tracking-widest">RGA Internal Media</p>
+                        </div>
+                        <div className="w-12 h-12 border border-white/10 rounded-full flex items-center justify-center">
+                            <div className="w-1 h-1 bg-[#D52B1E] rounded-full animate-pulse"></div>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
+      )}
+
+      <Footer />
+    </main>
   );
 }

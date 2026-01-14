@@ -1,13 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'images.unsplash.com',
-      },
+    domains: [
+      'firebasestorage.googleapis.com', // <--- REQUIRED for your uploads
+      'res.cloudinary.com',             // Keep if using Cloudinary fonts/assets
+      // any other domains you use
     ],
   },
-};
+}
 
-export default nextConfig;
+module.exports = nextConfig

@@ -1,9 +1,10 @@
 'use client';
 import { useEffect, useRef } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { ArrowRight, History, Binary, Crosshair } from 'lucide-react';
+import { ArrowRight, Crosshair, MapPin } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -55,9 +56,9 @@ export default function AboutTeaser() {
       
       {/* --- BACKGROUND GRAPHICS --- */}
       <div className="absolute inset-0 pointer-events-none select-none overflow-hidden">
-         {/* Giant Background Number */}
+         {/* Giant Background Number (Changed to 14 for 2014) */}
          <div className="absolute -top-20 -left-20 text-[40vw] font-black text-white/[0.02] leading-none">
-            72
+            14
          </div>
          {/* Grid Lines */}
          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:10rem_10rem]"></div>
@@ -101,53 +102,56 @@ export default function AboutTeaser() {
             </div>
         </div>
 
-        {/* --- RIGHT: TACTICAL DATA CARD (CSS Only) --- */}
-        <div ref={cardRef} className="relative">
+        {/* --- RIGHT: UNIFIED TACTICAL CARD (Image + 2014 Data) --- */}
+        <div ref={cardRef} className="relative group">
             
             {/* The "Card" Container */}
             <div className="relative bg-[#0a0a0a] border border-white/10 p-2 rounded-2xl shadow-2xl">
                 
                 {/* Inner Content */}
-                <div className="bg-[#050505] border border-white/5 rounded-xl p-8 relative overflow-hidden">
+                <div className="bg-[#050505] border border-white/5 rounded-xl p-8 relative overflow-hidden flex flex-col h-full min-h-[400px]">
                     
                     {/* Decorative Top Bar */}
                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#0039A6] via-[#D52B1E] to-transparent"></div>
 
-                    {/* Stats Grid */}
-                    <div className="grid grid-cols-2 gap-6 mb-12">
-                        <div className="p-4 bg-white/5 rounded-lg border border-white/5">
-                            <Binary className="text-[#0039A6] mb-3" size={20} />
-                            <div className="text-4xl font-mono font-bold text-white mb-1">1972</div>
-                            <div className="text-[10px] uppercase tracking-widest text-gray-500">Summit Series</div>
-                        </div>
-                        <div className="p-4 bg-white/5 rounded-lg border border-white/5">
-                            <Crosshair className="text-[#D52B1E] mb-3" size={20} />
-                            <div className="text-4xl font-mono font-bold text-white mb-1">2014</div>
-                            <div className="text-[10px] uppercase tracking-widest text-gray-500">Origin Year</div>
-                        </div>
+                    {/* IMAGE BACKGROUND (Rink.jpg as bg for the whole card) */}
+                    <div className="absolute inset-0 z-0">
+                        <Image
+                            src="/img/rink.jpg"
+                            alt="Ice Rink"
+                            fill
+                            className="object-cover opacity-30 mix-blend-luminosity group-hover:opacity-40 group-hover:scale-105 transition-all duration-700"
+                        />
+                        {/* Gradient Mesh Overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/80 to-transparent"></div>
                     </div>
 
-                    {/* Abstract "Map" or "Jersey" Graphic using CSS */}
-                    <div className="relative h-48 w-full bg-[#111] rounded-lg border border-white/5 flex items-center justify-center overflow-hidden mb-8 group-hover:border-white/10 transition-colors">
-                        {/* Abstract Red Lines */}
-                        <div className="absolute w-[150%] h-[20px] bg-[#D52B1E] -rotate-12 translate-y-4 opacity-80 blur-sm"></div>
-                        <div className="absolute w-[150%] h-[10px] bg-[#D52B1E] -rotate-12 -translate-y-4 opacity-60 blur-sm"></div>
+                    {/* CONTENT LAYER */}
+                    <div className="relative z-10 flex flex-col justify-between flex-grow h-full pt-32">
                         
-                        <div className="relative z-10 text-center">
-                             <div className="text-6xl font-black text-white tracking-tighter mix-blend-overlay">CCCP</div>
-                             <div className="text-xs font-mono text-gray-500 uppercase tracking-[0.5em] mt-2">Retro Heritage</div>
+                        {/* 2014 STATS (Now Overlaying Image) */}
+                        <div className="mb-8">
+                            <div className="flex items-end gap-4 mb-2">
+                                <span className="text-8xl font-black text-white leading-none tracking-tighter drop-shadow-2xl">2014</span>
+                                <Crosshair className="text-[#D52B1E] mb-4 animate-spin-slow" size={32} />
+                            </div>
+                            <div className="text-sm font-mono text-gray-400 uppercase tracking-[0.4em] pl-2 border-l-2 border-[#D52B1E]">
+                                Origin Year
+                            </div>
                         </div>
-                    </div>
 
-                    {/* Footer Data */}
-                    <div className="flex justify-between items-center border-t border-white/10 pt-6">
-                        <div>
-                            <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">Subject</div>
-                            <div className="text-sm font-bold text-white">Nariman Volkov</div>
-                        </div>
-                        <div className="text-right">
-                             <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">Location</div>
-                             <div className="text-sm font-bold text-white">Tampa Bay, FL</div>
+                        {/* Footer Data */}
+                        <div className="flex justify-between items-end border-t border-white/10 pt-6">
+                            <div>
+                                <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">Subject</div>
+                                <div className="text-sm font-bold text-white">Nariman Volkov</div>
+                            </div>
+                            <div className="text-right">
+                                 <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-gray-500 mb-1 justify-end">
+                                    <MapPin size={10} /> Location
+                                 </div>
+                                 <div className="text-sm font-bold text-white">Toronto, ON</div>
+                            </div>
                         </div>
                     </div>
 

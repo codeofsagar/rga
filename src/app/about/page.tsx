@@ -3,7 +3,7 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { MapPin,  CheckCircle2, Quote, Play, Check, Users, Trophy, ArrowRight } from 'lucide-react';
+import { MapPin, CheckCircle2, Quote, Play, Check, Users, Trophy, ArrowRight } from 'lucide-react';
 import Footer from '../section/Footer';
 import Image from 'next/image';
 gsap.registerPlugin(ScrollTrigger);
@@ -250,12 +250,12 @@ export default function AboutPage() {
             </div>
         </div>
 
-        =
         <div className="races flex flex-col md:flex-row md:h-full md:w-[300vw] w-full h-auto">
             
             {/* --- PANEL 1: THE CATALYST (2014) --- */}
             <div className="panel w-full md:w-[100vw] h-auto md:h-screen flex items-center justify-center relative border-b md:border-b-0 md:border-r border-white/5 bg-[#0a0a0a] py-16 md:py-0 px-6 md:px-0">
                  <div className="w-full max-w-7xl grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+                    {/* Text Side */}
                     <div className="order-2 md:order-1 space-y-6 md:space-y-8">
                         <div className="inline-block px-4 py-2 border border-[#D52B1E] text-[#D52B1E] text-xs font-mono uppercase tracking-widest">
                             Chapter 01: The Encounter
@@ -263,7 +263,6 @@ export default function AboutPage() {
                         <h2 className="text-4xl md:text-6xl font-bold uppercase leading-none">
                             2014.<br/>The Veterans<br/><span className="text-transparent stroke-text" style={{ WebkitTextStroke: '1px white' }}>Game.</span>
                         </h2>
-                        {/* Text is readable now, no scroll jacking on mobile */}
                         <div className="text-base md:text-xl text-gray-400 font-light leading-relaxed space-y-4">
                             <p>
                             My dream to visit Canada began in 2014 when I participated in a hockey veterans game with <span className="text-white font-bold">Phil Esposito</span>. 
@@ -274,37 +273,40 @@ export default function AboutPage() {
                             </p>
                         </div>
                     </div>
-                    <div className="order-1 md:order-2 relative h-[40vh] md:h-[50vh] w-full overflow-hidden rounded-lg shadow-2xl group">
-                        <div className="absolute inset-0 bg-[#D52B1E] mix-blend-multiply opacity-20 group-hover:opacity-0 transition-all duration-500"></div>
-                        <Image
-                             src="/img/ab1.jpg"
-                              alt="Hockey Rink"
-                              fill
-    className="object-cover scale-110 group-hover:scale-100 transition-transform duration-700"
-    sizes="(max-width: 768px) 100vw, 50vw"
-    priority={false}
-                        />
+                    {/* Image Side - 9:16 Aspect Ratio */}
+                    <div className="order-1 md:order-2 flex justify-center">
+                        <div className="relative aspect-[9/16] w-full md:w-[360px] lg:w-[400px] overflow-hidden rounded-lg shadow-2xl group">
+                            <div className="absolute inset-0 bg-[#D52B1E] mix-blend-multiply opacity-20 group-hover:opacity-0 transition-all duration-500 z-10"></div>
+                            <Image
+                                 src="/img/ab1.jpg"
+                                 alt="Hockey Rink"
+                                 fill
+                                 className="object-cover scale-110 group-hover:scale-100 transition-transform duration-700"
+                                 sizes="(max-width: 768px) 100vw, 400px"
+                                 priority={false}
+                            />
+                        </div>
                     </div>
                  </div>
             </div>
 
-            {/* --- PANEL 2: THE JERSEY & THE JOKE --- */}
+            {/* --- PANEL 2: THE JERSEY & THE JOKE (REMOVED EMPTY IMAGE FIELD) --- */}
             <div className="panel w-full md:w-[100vw] h-auto md:h-screen flex items-center justify-center relative border-b md:border-b-0 md:border-r border-white/5 bg-[#0e0e0e] py-16 md:py-0 px-6 md:px-0">
-                 <div className="w-full max-w-7xl grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-                    <div className="relative h-[40vh] md:h-[50vh] w-full overflow-hidden rounded-lg shadow-2xl">
-                     
-                       
+                 <div className="w-full max-w-5xl mx-auto flex flex-col items-center text-center">
+                    
+                    <div className="mb-8">
+                        <Quote className="text-[#D52B1E] w-16 h-16 opacity-80 mx-auto" />
                     </div>
-                    <div className="space-y-6 md:space-y-8">
-                        <Quote className="text-[#D52B1E] w-12 h-12 mb-4 opacity-80" />
-                        <h3 className="text-2xl md:text-5xl font-light leading-tight">
-                            He looked at my uniform... and jokingly said that maybe the <span className="font-black text-white">USSR national team</span> lacked a goalie like that.
-                        </h3>
-                        <div className="h-px w-20 bg-white/20 my-6"></div>
-                        <p className="text-base md:text-lg text-gray-400 font-light leading-relaxed">
-                            I had ordered pant shells to help Esposito remember his youth and all the great hockey moments. The battles against the Soviet team, specifically <span className="text-white">Tretiak</span>, had been a huge challenge for Team Canada.
-                        </p>
-                    </div>
+
+                    <h3 className="text-3xl md:text-6xl font-light leading-tight mb-8">
+                        He looked at my uniform... and jokingly said that maybe the <span className="font-black text-white">USSR national team</span> lacked a goalie like that.
+                    </h3>
+                    
+                    <div className="h-px w-32 bg-white/20 my-8"></div>
+                    
+                    <p className="text-base md:text-xl text-gray-400 font-light leading-relaxed max-w-3xl">
+                        I had ordered pant shells to help Esposito remember his youth and all the great hockey moments. The battles against the Soviet team, specifically <span className="text-white">Tretiak</span>, had been a huge challenge for Team Canada.
+                    </p>
                  </div>
             </div>
 
@@ -348,12 +350,12 @@ export default function AboutPage() {
                  {/* Floating Image Effect */}
                  <div className="relative aspect-[4/5] overflow-hidden rounded-sm  transition-all duration-700 ease-out border-2 border-white/5 group-hover:border-[#D52B1E]/50">
                     <Image 
-                     src="/img/g2.jpg"
-    alt="Hockey Rink"
-    fill
-    className="object-cover scale-110 group-hover:scale-100 transition-transform duration-700"
-    sizes="(max-width: 768px) 100vw, 50vw"
-    priority={false}
+                      src="/img/g2.jpg"
+                      alt="Hockey Rink"
+                      fill
+                      className="object-cover scale-110 group-hover:scale-100 transition-transform duration-700"
+                      sizes="(max-width: 768px) 100vw, 50vw"
+                      priority={false}
                     />
                     <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-black to-transparent p-8 pt-20">
                         <p className="text-white font-bold text-lg">Vladimir Semenovich Myshkin</p>
@@ -394,7 +396,6 @@ export default function AboutPage() {
 
       {/* ===================================================
           4. PROCESS SECTION (NEW "TACTICAL PLAYBOOK" DESIGN)
-          Replaces the sticky cards with a clean grid layout
          =================================================== */}
       <section className="relative bg-[#050505] pt-24 pb-32">
           {/* Section Header */}
@@ -484,7 +485,7 @@ export default function AboutPage() {
                   </div>
 
               </div>
-             
+              
           </div>
            <Footer/>
       </section>

@@ -3,55 +3,42 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { db } from '../lib/firebase';
-import { collection, getDocs, orderBy, query, addDoc, getCountFromServer } from 'firebase/firestore';
+import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { Check, MapPin, Activity, ArrowRight, Zap, Users, Star, Calendar, Loader } from 'lucide-react';
 import Copy from '../components/Copy';
-import { packages as staticPackages } from '../lib/packages'; // Import static as backup/seed
 
-// Define Interface
+// Matches your Admin definition
 interface PackageData {
   id?: string;
   name: string;
   price: number;
   price5: number;
   price10: number;
-  description?: string; // Optional tagline
+  peopleCount: number; // Used for dynamic tagging
+  maxQuantity: number;
 }
 
 export default function CinematicPricing() {
   const [packages, setPackages] = useState<PackageData[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // --- 1. FETCH REAL-TIME DATA ---
+  // --- FETCH REAL DATA ONLY ---
   useEffect(() => {
     const fetchPackages = async () => {
       try {
         const pkgCollection = collection(db, 'packages');
-        
-        // A. Check if collection exists/has data
-        const snapshot = await getCountFromServer(pkgCollection);
-        
-        // B. IF EMPTY: Upload Static Data (One-time Auto-Seed)
-        if (snapshot.data().count === 0) {
-          console.log("Seeding Database with Packages...");
-          for (const pkg of staticPackages) {
-            await addDoc(pkgCollection, { 
-                ...pkg, 
-                order: pkg.name === 'Individual' ? 1 : pkg.name === 'Group of 2' ? 2 : 3 // Ensure order
-            });
-          }
-        }
-
-        // C. Fetch Data
-        const q = query(pkgCollection, orderBy('price', 'desc')); // Order by price or custom field
+        // Order by the 'order' field we set in Admin, or fallback to price
+        const q = query(pkgCollection, orderBy('order', 'asc')); 
         const querySnapshot = await getDocs(q);
-        const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PackageData));
+        
+        const data = querySnapshot.docs.map(doc => ({ 
+            id: doc.id, 
+            ...doc.data() 
+        } as PackageData));
         
         setPackages(data);
       } catch (error) {
         console.error("Error fetching packages:", error);
-        // Fallback to static if DB fails
-        setPackages(staticPackages);
       } finally {
         setLoading(false);
       }
@@ -60,7 +47,7 @@ export default function CinematicPricing() {
     fetchPackages();
   }, []);
 
-  // --- 2. GET ONLY FIRST 3 ---
+  // --- LIMIT TO 3 ITEMS ---
   const displayPackages = packages.slice(0, 3);
 
   return (
@@ -102,9 +89,14 @@ export default function CinematicPricing() {
             </p>
         </div>
 
-        {/* ==================== PRICING CARDS (DYNAMIC) ==================== */}
+        {/* ==================== PRICING CARDS (REAL DATA) ==================== */}
         {loading ? (
              <div className="flex justify-center py-20"><Loader className="animate-spin text-[#D52B1E]" size={40} /></div>
+        ) : packages.length === 0 ? (
+             <div className="text-center py-20 bg-white/5 border border-white/10 rounded-xl">
+                 <p className="text-gray-500 font-mono uppercase tracking-widest text-sm">No packages currently available.</p>
+                 <Link href="/admin" className="text-[#D52B1E] text-xs underline mt-2 inline-block hover:text-white">Admin: Create Packages</Link>
+             </div>
         ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12 relative items-start">
                 {displayPackages.map((pkg, index) => (
@@ -114,17 +106,19 @@ export default function CinematicPricing() {
         )}
 
         {/* ==================== SEE ALL BUTTON ==================== */}
-        <div className="flex justify-center mb-24 relative z-20">
-            <Link 
-                href="/book" 
-                className="group relative px-8 py-4 bg-white text-black font-black uppercase tracking-widest text-sm hover:bg-[#D52B1E] hover:text-white transition-all duration-300 skew-x-[-10deg]"
-            >
-                <div className="absolute inset-0 border border-white/20 skew-x-[10deg] scale-105 opacity-0 group-hover:opacity-100 transition-all"></div>
-                <span className="flex items-center gap-3 skew-x-[10deg]">
-                    View All Packages & Availability <ArrowRight size={16} />
-                </span>
-            </Link>
-        </div>
+        {packages.length > 0 && (
+            <div className="flex justify-center mb-24 relative z-20">
+                <Link 
+                    href="/book" 
+                    className="group relative px-8 py-4 bg-white text-black font-black uppercase tracking-widest text-sm hover:bg-[#D52B1E] hover:text-white transition-all duration-300 skew-x-[-10deg]"
+                >
+                    <div className="absolute inset-0 border border-white/20 skew-x-[10deg] scale-105 opacity-0 group-hover:opacity-100 transition-all"></div>
+                    <span className="flex items-center gap-3 skew-x-[10deg]">
+                        View All Packages & Availability <ArrowRight size={16} />
+                    </span>
+                </Link>
+            </div>
+        )}
 
         {/* ==================== PROCESS SECTION ==================== */}
         <div className="text-center mb-32 relative z-20">
@@ -133,13 +127,10 @@ export default function CinematicPricing() {
             </p>
         </div>
 
-        
-
-      </div>
-      <div className="bg-[#000000] max-w-full   p-8 md:p-16  relative overflow-hidden">
+        <div className="bg-[#000000] border border-white/10 rounded-[3rem] p-8 md:p-16 relative overflow-hidden">
             <div className="relative z-10">
                 <div className="flex flex-col md:flex-row gap-12 items-start">
-                    <div className="">
+                    <div className="md:w-1/3">
                         <Copy>
                             <h3 className="text-6xl md:text-7xl font-normal uppercase mb-6 ">
                                 The <br/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#D52B1E] to-[#0039A6]">Protocol</span>
@@ -161,18 +152,25 @@ export default function CinematicPricing() {
                 </div>
             </div>
         </div>
+
+      </div>
     </section>
   );
 }
 
 // --- SUB-COMPONENTS ---
 
-// 1. DYNAMIC PRICING CARD
-// Handles the styling (Red/Blue/White) based on Index
 const DynamicPricingCard = ({ pkg, index }: { pkg: PackageData, index: number }) => {
-    // STYLES CONFIGURATION
+    
+    // Determine Tagline based on REAL data (peopleCount)
+    // If peopleCount is 1 -> "Private Focus". If > 1 -> "Group of X"
+    const dynamicTagline = pkg.peopleCount === 1 
+        ? "Private Focus" 
+        : `Group of ${pkg.peopleCount}`;
+
+    // STYLES CONFIGURATION (Cyclical: Red -> Blue -> White)
     const styles = [
-        // Index 0: RED (Individual)
+        // Index 0: RED
         {
             borderColor: 'hover:border-[#D52B1E]',
             gradient: 'from-transparent via-[#D52B1E] to-transparent',
@@ -181,11 +179,10 @@ const DynamicPricingCard = ({ pkg, index }: { pkg: PackageData, index: number })
             shadow: 'shadow-[0_0_20px_rgba(213,43,30,0.4)]',
             btnBg: 'bg-[#1a1a1a] hover:bg-[#D52B1E]',
             activeText: 'text-[#D52B1E]',
-            tagline: '1 on 1 Focus',
             Icon: Zap,
             isHero: false
         },
-        // Index 1: BLUE (Group of 2) - HERO CARD
+        // Index 1: BLUE (Hero)
         {
             borderColor: 'border-[#0039A6]',
             gradient: 'from-transparent via-[#0039A6] to-transparent',
@@ -194,11 +191,10 @@ const DynamicPricingCard = ({ pkg, index }: { pkg: PackageData, index: number })
             shadow: 'shadow-[0_0_20px_rgba(0,57,166,0.4)]',
             btnBg: 'bg-[#0039A6] text-white hover:bg-white hover:text-[#0039A6]',
             activeText: 'text-[#0039A6]',
-            tagline: 'Per Person',
             Icon: Users,
             isHero: true
         },
-        // Index 2+: WHITE (Group of 3+)
+        // Index 2: WHITE
         {
             borderColor: 'hover:border-white',
             gradient: 'from-transparent via-white to-transparent',
@@ -207,23 +203,20 @@ const DynamicPricingCard = ({ pkg, index }: { pkg: PackageData, index: number })
             shadow: '',
             btnBg: 'bg-[#1a1a1a] hover:bg-white hover:text-black',
             activeText: 'text-white',
-            tagline: 'Per Person',
             Icon: Activity,
             isHero: false
         }
     ];
 
-    // Pick style based on index (loop back if > 3)
-    const style = styles[index] || styles[2]; 
-    const isHero = style.isHero;
+    const style = styles[index % 3]; 
+    const isHero = index === 1; // 2nd card is always the "Hero" visually
 
     return (
         <div className={`group relative bg-[#111] border ${isHero ? 'border-2' : 'border'} ${isHero ? style.borderColor : 'border-[#333]'} rounded-[2rem] p-1 overflow-hidden ${style.borderColor} transition-colors duration-500 shadow-2xl ${isHero ? 'transform lg:-translate-y-6 shadow-[0_0_50px_rgba(0,57,166,0.15)] z-20' : ''}`}>
             
-            {/* Top Gradient Line */}
             <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${style.gradient} opacity-50 group-hover:opacity-100 transition-opacity`}></div>
             
-            {/* "Most Popular" Badge for Hero */}
+            {/* Tagline Badge */}
             {isHero && <div className="absolute top-0 left-1/2 -translate-x-1/2 bg-[#0039A6] text-white text-xs font-black uppercase tracking-widest px-6 py-2 rounded-b-xl z-20 shadow-lg">Most Popular</div>}
 
             <div className="bg-[#080808] rounded-[1.8rem] p-8 md:p-10 h-full relative z-10 flex flex-col">
@@ -233,9 +226,9 @@ const DynamicPricingCard = ({ pkg, index }: { pkg: PackageData, index: number })
                             <style.Icon size={28} fill="currentColor" />
                         </div>
                         <div className="text-right">
-                            <h3 className="text-3xl font-black uppercase italic text-white">{pkg.name}</h3>
-                            <p className={`${index === 1 ? 'text-[#0039A6]' : index === 0 ? 'text-[#D52B1E]' : 'text-gray-400'} font-bold uppercase text-xs tracking-widest`}>
-                                {style.tagline}
+                            <h3 className="text-2xl font-black uppercase italic text-white leading-tight">{pkg.name}</h3>
+                            <p className={`${index === 1 ? 'text-[#0039A6]' : index === 0 ? 'text-[#D52B1E]' : 'text-gray-400'} font-bold uppercase text-xs tracking-widest mt-1`}>
+                                {dynamicTagline}
                             </p>
                         </div>
                     </div>
