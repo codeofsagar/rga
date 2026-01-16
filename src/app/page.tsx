@@ -7,10 +7,7 @@ import HomeAnnouncements from './section/HomeAnnouncements';
 
 import ProcessAndPricing from './section/ProcessAndPricing';
 import ReviewSection from "./section/ReviewSection";
-// import AboutSection from '@/components/AboutSection';
-// import PricingSection from '@/components/PricingSection';
-// import ReviewsSection from '@/components/ReviewsSection';
-// import FooterCTA from '@/components/FooterCTA';
+
 
 export default function Home() {
   return (
