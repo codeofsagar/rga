@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { adminDb } from '@/app/lib/firebaseAdmin'; // Ensure this path matches where you created the file
+import { adminDb } from '@/app/lib/firebaseAdmin'; 
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-11-17.clover'  // Cast if your types are older than the version string
+  apiVersion: '2025-11-17.clover', // Use a stable version
 });
 
 export async function POST(req: NextRequest) {
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required session information' }, { status: 400 });
     }
 
-    // 1. Use Admin SDK to get the slot (Bypasses Security Rules)
+    // 1. Get slot from Admin DB
     const slotRef = adminDb.collection('training_slots').doc(slotId);
     const slotSnap = await slotRef.get();
 
@@ -29,24 +29,14 @@ export async function POST(req: NextRequest) {
 
     const slot = slotSnap.data()!;
 
-    // 3. Data Validation
-    if (
-      typeof slot.price !== 'number' ||
-      !slot.packageName ||
-      !slot.date ||
-      !slot.startTime
-    ) {
-      console.error('Invalid slot data:', slot);
-      throw new Error('Corrupt slot data in the database. Please contact support.');
+    // 3. Validation
+    if (!slot.price || !slot.date || !slot.startTime) {
+      throw new Error('Corrupt slot data in database.');
     }
 
     const trainingDate = new Date(slot.date);
-    if (isNaN(trainingDate.getTime())) {
-      console.error('Invalid date format:', slot);
-      throw new Error('Corrupt date format in the database.');
-    }
 
-    // 4. Mark as "Pending" (Admin Write)
+    // 4. Mark as Pending
     await slotRef.update({
       status: 'pending',
       customerName,
@@ -54,18 +44,27 @@ export async function POST(req: NextRequest) {
       userId,
     });
 
-    // 5. Create Stripe Session
+    // --- 5. CALCULATE PRICE + HST (Client Requirement) ---
+    const BASE_PRICE = slot.price; // e.g. 150
+    const HST_RATE = 0.13;         // 13% Tax
+    const TAX_AMOUNT = BASE_PRICE * HST_RATE; 
+    const TOTAL_AMOUNT = BASE_PRICE + TAX_AMOUNT; // e.g. 169.50
+
+    // Stripe requires amount in CENTS (Integers only)
+    const UNIT_AMOUNT_CENTS = Math.round(TOTAL_AMOUNT * 100); 
+
+    // 6. Create Stripe Session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
         {
           price_data: {
-            currency: 'usd',
+            currency: 'cad', // <--- CHANGED TO CAD
             product_data: {
-              name: slot.packageName,
-              description: `Training session on ${trainingDate.toLocaleDateString()} at ${slot.startTime}`,
+              name: `RGA Training: ${slot.packageName}`,
+              description: `${trainingDate.toLocaleDateString()} @ ${slot.startTime} (Includes HST)`,
             },
-            unit_amount: slot.price * 100, // Amount in cents
+            unit_amount: UNIT_AMOUNT_CENTS, // <--- USES TOTAL WITH TAX
           },
           quantity: 1,
         },
@@ -82,16 +81,14 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ sessionId: session.id, url: session.url });
 
-  } catch (error: unknown) { // FIXED: Changed 'any' to 'unknown'
+  } catch (error: unknown) {
     console.error('Booking Process Error:', error);
 
-    // 6. Revert Logic (Using Admin SDK)
+    // Revert logic
     if (slotId) {
       try {
         const slotRef = adminDb.collection('training_slots').doc(slotId);
         const slotSnap = await slotRef.get();
-        
-        // Only revert if it is still "pending"
         if (slotSnap.exists && slotSnap.data()?.status === 'pending') {
           await slotRef.update({
             status: 'available',
@@ -99,19 +96,15 @@ export async function POST(req: NextRequest) {
             customerEmail: null,
             userId: null,
           });
-          console.log(`Successfully reverted slot ${slotId} to available.`);
         }
       } catch (revertError) {
-        console.error(`CRITICAL: Failed to revert slot status for slotId ${slotId}:`, revertError);
+        console.error('Failed to revert slot:', revertError);
       }
     }
 
-    // FIXED: Type check the error message
-    let errorMessage = 'An unknown error occurred. Please try again.';
-    if (error instanceof Error) {
-      errorMessage = error.message;
-    }
+    let errorMessage = 'An unknown error occurred.';
+    if (error instanceof Error) errorMessage = error.message;
 
-    return NextResponse.json({ error: `Internal Server Error: ${errorMessage}` }, { status: 500 });
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
