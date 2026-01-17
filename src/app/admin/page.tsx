@@ -61,7 +61,7 @@ interface Booking {
   clientName: string;
   clientEmail: string;
   clientPhone: string;
-  packageName: string;
+  packageName?: string; // Made optional to prevent crashes
   slotId: string;
   status: string;
   createdAt: string;
@@ -85,7 +85,7 @@ export default function AdminDashboard() {
   const [selectedPackage, setSelectedPackage] = useState('');
   const [slotPrice, setSlotPrice] = useState(0);
   const [slotCapacity, setSlotCapacity] = useState(1);
-  const [sessionDates, setSessionDates] = useState([{ date: '', startTime: '' }]); // Array for bulk add
+  const [sessionDates, setSessionDates] = useState([{ date: '', startTime: '' }]);
 
   // OTHER FORMS
   const [pkgForm, setPkgForm] = useState({ name: '', price: 0, price5: 0, price10: 0, peopleCount: 1, maxQuantity: 0 });
@@ -109,8 +109,6 @@ export default function AdminDashboard() {
       const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
       if (user && user.email === adminEmail) {
         setAuthorized(true);
-        
-        // Fetch all collections
         onSnapshot(query(collection(db, "training_slots"), orderBy("date")), (snap) => setSlots(snap.docs.map(d => ({ id: d.id, ...d.data() } as TrainingSlot))));
         onSnapshot(query(collection(db, "packages"), orderBy("order")), (snap) => setPackages(snap.docs.map(d => ({ id: d.id, ...d.data() } as PackageTier))));
         onSnapshot(query(collection(db, "events"), orderBy("startDate")), (snap) => setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() } as EventCamp))));
@@ -149,13 +147,13 @@ export default function AdminDashboard() {
       });
       await Promise.all(promises);
       setSuccessMsg(`${sessionDates.length} Sessions Deployed!`);
-      setSessionDates([{ date: '', startTime: '' }]); // Reset dates only
+      setSessionDates([{ date: '', startTime: '' }]);
       setTimeout(() => setSuccessMsg(''), 3000);
     } catch (err) { console.error(err); alert("Error creating slots"); }
     setIsSubmitting(false);
   };
 
-  // --- HANDLERS: PACKAGES ---
+  // --- OTHER HANDLERS ---
   const handlePackageSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setIsSubmitting(true);
     try { await addDoc(collection(db, "packages"), { name: pkgForm.name, price: Number(pkgForm.price), price5: Number(pkgForm.price5), price10: Number(pkgForm.price10), peopleCount: isGroup ? Number(pkgForm.peopleCount) : 1, maxQuantity: isLimited ? Number(pkgForm.maxQuantity) : 0, order: packages.length + 1 });
@@ -163,7 +161,6 @@ export default function AdminDashboard() {
     } catch (err) { console.error(err); } setIsSubmitting(false);
   };
 
-  // --- HANDLERS: CAMPS ---
   const handleEditEvent = (event: EventCamp) => { setEditingEventId(event.id); setEventForm({ title: event.title, description: event.description, startDate: event.startDate, endDate: event.endDate, price: event.price, capacity: event.capacity }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const cancelEventEdit = () => { setEditingEventId(null); setEventForm({ title: '', description: '', startDate: '', endDate: '', price: 0, capacity: 20 }); };
   const handleEventSubmit = async (e: React.FormEvent) => {
@@ -174,7 +171,6 @@ export default function AdminDashboard() {
     } catch (err) { console.error(err); } setIsSubmitting(false);
   };
 
-  // --- HANDLERS: GALLERY ---
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files[0]) { setSelectedFile(e.target.files[0]); setPreviewUrl(URL.createObjectURL(e.target.files[0])); } };
   const handleEditGallery = (item: GalleryItem) => { setEditingGalleryId(item.id); setGalleryDescription(item.description); setPreviewUrl(item.imageUrl); setSelectedFile(null); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const cancelGalleryEdit = () => { setEditingGalleryId(null); setGalleryDescription(''); setPreviewUrl(null); setSelectedFile(null); };
@@ -186,7 +182,7 @@ export default function AdminDashboard() {
     } catch (err) { console.error(err); } setIsSubmitting(false);
   };
 
-  // --- HANDLERS: REQUESTS ---
+  // --- REQUEST APPROVAL HANDLER ---
   const handleUpdateStatus = async (bookingId: string, slotId: string, newStatus: string) => {
     if (!confirm(`Mark as ${newStatus}?`)) return;
     try { const res = await fetch('/api/booking/status', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ bookingId, slotId, status: newStatus }) });
@@ -196,7 +192,19 @@ export default function AdminDashboard() {
 
   const handleDelete = async (col: string, id: string) => { if(confirm("Delete?")) await deleteDoc(doc(db, col, id)); };
   const handleLogout = async () => { await signOut(auth); router.push('/login'); };
-  const getSlotDetails = (slotId: string) => { const slot = slots.find(s => s.id === slotId); return slot ? `${slot.date} @ ${slot.startTime}` : 'Unknown'; };
+  
+  // Helper to find slot info from booking
+  const getSlotDetails = (slotId: string) => { 
+    const slot = slots.find(s => s.id === slotId); 
+    return slot ? `${slot.date} @ ${slot.startTime}` : 'Unknown Date'; 
+  };
+  
+  // Helper to get Package Name safely
+  const getPackageName = (booking: Booking) => {
+    if (booking.packageName) return booking.packageName;
+    const slot = slots.find(s => s.id === booking.slotId);
+    return slot ? slot.packageName : 'Unknown Package';
+  };
 
   if (loading) return <div className="h-screen bg-black text-white flex items-center justify-center"><Loader className="animate-spin" /></div>;
   if (!authorized) return null;
@@ -231,10 +239,27 @@ export default function AdminDashboard() {
                         <thead className="bg-white/5 border-b border-white/10"><tr><th className="p-4 text-[10px] text-gray-400 uppercase">Client</th><th className="p-4 text-[10px] text-gray-400 uppercase">Session</th><th className="p-4 text-[10px] text-gray-400 uppercase">Status</th><th className="p-4 text-right">Actions</th></tr></thead>
                         <tbody className="divide-y divide-white/5 text-sm">{bookings.map(b => (
                             <tr key={b.id} className="hover:bg-white/5">
-                                <td className="p-4"><div className="font-bold text-white">{b.clientName}</div><div className="text-xs text-gray-500 flex items-center gap-2 mt-1"><Mail size={12}/> {b.clientEmail}</div><div className="text-xs text-gray-500 flex items-center gap-2 mt-1"><Phone size={12}/> {b.clientPhone}</div></td>
-                                <td className="p-4"><div className="text-white font-bold">{b.packageName}</div><div className="text-[#D52B1E] font-mono text-xs">{getSlotDetails(b.slotId)}</div></td>
+                                <td className="p-4">
+                                    <div className="font-bold text-white flex gap-2"><User size={14}/> {b.clientName}</div>
+                                    <div className="text-xs text-gray-500 mt-1 flex gap-2"><Mail size={12}/> {b.clientEmail}</div>
+                                    <div className="text-xs text-gray-500 mt-1 flex gap-2"><Phone size={12}/> {b.clientPhone}</div>
+                                </td>
+                                <td className="p-4">
+                                    {/* FIX: Use helper function to find Package Name if missing */}
+                                    <div className="text-white font-bold">{getPackageName(b)}</div>
+                                    <div className="text-[#D52B1E] font-mono text-xs mt-1">{getSlotDetails(b.slotId)}</div>
+                                </td>
                                 <td className="p-4"><span className={`px-2 py-1 text-[10px] font-bold uppercase rounded ${b.status === 'pending' ? 'bg-yellow-500/20 text-yellow-500' : b.status === 'approved' ? 'bg-blue-500/20 text-blue-500' : 'bg-white/10'}`}>{b.status}</span></td>
-                                <td className="p-4 text-right">{b.status === 'pending' && (<div className="flex justify-end gap-2"><button onClick={() => handleUpdateStatus(b.id, b.slotId, 'approved')} className="bg-green-600 text-white px-3 py-1 rounded text-[10px] font-bold uppercase">Approve</button><button onClick={() => handleUpdateStatus(b.id, b.slotId, 'rejected')} className="bg-red-600 text-white px-3 py-1 rounded text-[10px] font-bold uppercase">Reject</button></div>)}</td>
+                                <td className="p-4 text-right">
+                                    {b.status === 'pending' ? (
+                                        <div className="flex justify-end gap-2">
+                                            <button onClick={() => handleUpdateStatus(b.id, b.slotId, 'approved')} className="bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded text-[10px] font-bold uppercase tracking-widest">Approve</button>
+                                            <button onClick={() => handleUpdateStatus(b.id, b.slotId, 'rejected')} className="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded text-[10px] font-bold uppercase tracking-widest">Reject</button>
+                                        </div>
+                                    ) : (
+                                        <span className="text-xs text-gray-500 uppercase font-mono">{b.status}</span>
+                                    )}
+                                </td>
                             </tr>
                         ))}
                         {bookings.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-gray-500">No pending requests.</td></tr>}
@@ -281,7 +306,7 @@ export default function AdminDashboard() {
             </div>
         )}
 
-        {/* ================= CAMPS TAB (RESTORED) ================= */}
+        {/* ================= CAMPS TAB ================= */}
         {activeTab === 'events' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-1 bg-[#111] border border-white/10 p-6 rounded-xl relative">
@@ -299,7 +324,7 @@ export default function AdminDashboard() {
             </div>
         )}
 
-        {/* ================= GALLERY TAB (RESTORED) ================= */}
+        {/* ================= GALLERY TAB ================= */}
         {activeTab === 'gallery' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-1 bg-[#111] border border-white/10 p-6 rounded-xl">
