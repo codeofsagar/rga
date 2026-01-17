@@ -117,6 +117,8 @@ export default function BookSession() {
     if (step === 2) setStep(1);
   };
 
+  // Inside src/app/book/page.tsx
+
   const handleBook = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSlot || !name || !email) return;
@@ -136,23 +138,20 @@ export default function BookSession() {
         }),
       });
 
-      if (!response.ok) throw new Error("Payment initialization failed");
-      const { url } = await response.json();
-      window.location.href = url; 
+      // --- NEW: Read the error details ---
+      const data = await response.json(); 
 
-    } catch (err: unknown) { // <--- CHANGED FROM 'any' TO 'unknown'
-      console.error("Booking Error:", err);
-      
-      let errorMessage = "An error occurred";
-      
-      // Type Narrowing: Check if it's a real Error object
-      if (err instanceof Error) {
-        errorMessage = err.message;
-      } else if (typeof err === "string") {
-        errorMessage = err;
+      if (!response.ok) {
+        throw new Error(data.error || "Payment initialization failed");
       }
 
-      setFormError(errorMessage);
+      window.location.href = data.url; 
+
+    } catch (err: unknown) {
+      console.error("Booking Error:", err);
+      let errorMessage = "An error occurred";
+      if (err instanceof Error) errorMessage = err.message;
+      setFormError(errorMessage); // Now this will show the REAL error on screen
       setIsSubmitting(false);
     }
   };
