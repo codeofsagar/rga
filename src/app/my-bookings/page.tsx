@@ -1,23 +1,22 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAuth } from '../contexts/AuthContext'; // Check path ../../ or ../ depending on folder structure
+import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
-import { collectionGroup, query, where, getDocs, orderBy, getDoc, doc } from 'firebase/firestore'; 
+import { collection, query, where, getDocs, orderBy, getDoc, doc } from 'firebase/firestore'; 
 import { useRouter } from 'next/navigation';
-import { Loader, Clock, Package, CheckCircle, History, Shield } from 'lucide-react';
-import Footer from '../section/Footer'; // Added Footer for consistency
+import { Loader, Clock, Package, CheckCircle, History, Shield, AlertCircle, CreditCard, XCircle } from 'lucide-react';
+import Footer from '../section/Footer'; 
 
-// Define a type that combines the Booking info with the parent Slot info
 interface MyBooking {
-  id: string; // Booking ID
-  slotId: string; // Parent Slot ID
+  id: string; 
+  slotId: string;
   bookedAt: string;
   packageName: string;
   date: string;
   startTime: string;
   price: number;
-  status: string;
+  status: 'pending' | 'approved' | 'paid' | 'rejected';
 }
 
 export default function MyBookings() {
@@ -31,41 +30,45 @@ export default function MyBookings() {
     if (!loading && !user) router.push('/login');
   }, [user, loading, router]);
 
-  // 2. Fetch Bookings
+  // 2. Fetch Bookings (Updated for Request Flow)
   useEffect(() => {
     const fetchBookings = async () => {
       if (user) {
         try {
-          // NOTE: This query requires a Firestore Index. 
-          // If it fails, check your browser console for a link to create it instantly.
+          // Query the root 'bookings' collection (where the Request API saves them)
           const q = query(
-            collectionGroup(db, 'bookings'),
+            collection(db, 'bookings'),
             where('userId', '==', user.uid),
-            orderBy('bookedAt', 'desc')
+            orderBy('createdAt', 'desc')
           );
 
           const querySnapshot = await getDocs(q);
           
           const bookingPromises = querySnapshot.docs.map(async (bookingDoc) => {
             const bookingData = bookingDoc.data();
-            const parentSlotId = bookingDoc.ref.parent.parent?.id; 
             
-            if (!parentSlotId) return null;
+            // In the new flow, slotId is inside the document, not a parent
+            const slotId = bookingData.slotId;
+            
+            if (!slotId) return null;
 
-            const slotSnap = await getDoc(doc(db, 'training_slots', parentSlotId));
+            // Fetch Slot Data to get the Date & Time
+            const slotSnap = await getDoc(doc(db, 'training_slots', slotId));
+            
+            // Even if slot is "locked/requested", the doc still exists, so we can read it
             if (!slotSnap.exists()) return null;
 
             const slotData = slotSnap.data();
 
             return {
               id: bookingDoc.id,
-              slotId: parentSlotId,
-              bookedAt: bookingData.bookedAt,
-              packageName: slotData.packageName,
+              slotId: slotId,
+              bookedAt: bookingData.createdAt,
+              packageName: bookingData.packageName || slotData.packageName, // Use booking data if available
               date: slotData.date,
               startTime: slotData.startTime,
-              price: slotData.price,
-              status: bookingData.status || 'confirmed'
+              price: bookingData.price || slotData.price,
+              status: bookingData.status || 'pending'
             } as MyBooking;
           });
 
@@ -82,6 +85,35 @@ export default function MyBookings() {
 
     if (user) fetchBookings();
   }, [user]);
+
+  // --- PAYMENT HANDLER ---
+  const handlePayNow = async (booking: MyBooking) => {
+    try {
+        const res = await fetch('/api/checkout_sessions', {
+            method: 'POST', 
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ 
+                bookingId: booking.id, // We pass the Booking ID to update it later
+                slotId: booking.slotId,
+                price: booking.price,
+                packageName: booking.packageName,
+                userId: user?.uid,
+                customerEmail: user?.email,
+                customerName: user?.displayName
+            })
+        });
+        
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Payment failed");
+        
+        // Redirect to Stripe
+        window.location.href = data.url;
+
+    } catch (error) {
+        alert("Payment initialization failed. Please contact support.");
+        console.error(error);
+    }
+  };
 
   // --- UTILS ---
   const formatTime = (time: string) => {
@@ -105,17 +137,13 @@ export default function MyBookings() {
   if (!user) return null;
 
   const now = new Date();
-  const upcomingBookings = bookings.filter(b => new Date(b.date + 'T' + b.startTime) >= now);
-  const pastBookings = bookings.filter(b => new Date(b.date + 'T' + b.startTime) < now);
+  // Filter bookings (Pending/Approved go to Upcoming, Paid goes to History if in past)
+  const upcomingBookings = bookings.filter(b => b.status !== 'rejected' && (b.status !== 'paid' || new Date(b.date + 'T' + b.startTime) >= now));
+  const pastBookings = bookings.filter(b => b.status === 'paid' && new Date(b.date + 'T' + b.startTime) < now);
 
   return (
     <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#D52B1E] selection:text-white flex flex-col">
       
-      {/* MAIN CONTENT WRAPPER 
-          - pt-32 adds padding to top on mobile
-          - md:pt-40 adds more padding on desktop to clear navbar
-          - flex-grow pushes the footer down
-      */}
       <div className="flex-grow max-w-4xl mx-auto w-full px-6 md:px-12 pt-32 md:pt-40 pb-20">
         
         {/* HEADER */}
@@ -131,7 +159,7 @@ export default function MyBookings() {
 
         <div className="space-y-16">
           
-          {/* UPCOMING SECTION */}
+          {/* UPCOMING / ACTIVE SECTION */}
           <div>
             <h2 className="text-lg font-bold uppercase tracking-widest text-white mb-6 flex items-center gap-2">
               <CheckCircle size={18} className="text-green-500" /> Active Deployments
@@ -141,7 +169,12 @@ export default function MyBookings() {
               <div className="grid gap-4">
                 {upcomingBookings.map(slot => (
                   <div key={slot.id} className="group bg-white/5 border border-white/10 p-6 relative overflow-hidden transition-all hover:bg-white/10 hover:border-white/20 rounded-lg">
-                    <div className="absolute left-0 top-0 h-full w-[3px] bg-green-500 group-hover:w-[6px] transition-all" />
+                    {/* Status Line Color */}
+                    <div className={`absolute left-0 top-0 h-full w-[3px] transition-all group-hover:w-[6px]
+                        ${slot.status === 'paid' ? 'bg-green-500' : 
+                          slot.status === 'approved' ? 'bg-[#D52B1E] animate-pulse' : 
+                          'bg-yellow-500'}
+                    `} />
                     
                     <div className="flex flex-wrap justify-between items-center relative z-10 pl-3">
                       <div>
@@ -149,20 +182,49 @@ export default function MyBookings() {
                             <span className="text-2xl font-black uppercase tracking-tight text-white">
                               {new Date(slot.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
                             </span>
-                            <span className="text-[10px] font-bold font-mono bg-green-500/10 text-green-500 px-2 py-1 border border-green-500/20 uppercase rounded">
-                              Confirmed
-                            </span>
+                            
+                            {/* STATUS BADGE */}
+                            {slot.status === 'pending' && (
+                                <span className="flex items-center gap-1 text-[10px] font-bold font-mono bg-yellow-500/10 text-yellow-500 px-2 py-1 border border-yellow-500/20 uppercase rounded">
+                                    <Clock size={10} /> Pending Approval
+                                </span>
+                            )}
+                            {slot.status === 'approved' && (
+                                <span className="flex items-center gap-1 text-[10px] font-bold font-mono bg-[#D52B1E]/10 text-[#D52B1E] px-2 py-1 border border-[#D52B1E]/20 uppercase rounded animate-pulse">
+                                    <AlertCircle size={10} /> Action Required
+                                </span>
+                            )}
+                            {slot.status === 'paid' && (
+                                <span className="flex items-center gap-1 text-[10px] font-bold font-mono bg-green-500/10 text-green-500 px-2 py-1 border border-green-500/20 uppercase rounded">
+                                    <CheckCircle size={10} /> Confirmed
+                                </span>
+                            )}
                         </div>
+
                         <div className="flex items-center gap-4 text-xs text-gray-400 font-mono uppercase tracking-widest mt-2">
                             <span className="flex items-center gap-1"><Package size={12} /> {slot.packageName}</span>
                             <span className="flex items-center gap-1 text-white"><Clock size={12} className="text-[#D52B1E]" /> {formatTime(slot.startTime)}</span>
                         </div>
                       </div>
 
-                      <div className="text-right mt-4 sm:mt-0">
+                      <div className="text-right mt-4 sm:mt-0 flex flex-col items-end gap-2">
                          <div className="text-xl font-bold font-mono text-gray-500 group-hover:text-white transition-colors">
                            ${slot.price}
                          </div>
+
+                         {/* PAY BUTTON - Only shows if Approved */}
+                         {slot.status === 'approved' && (
+                             <button 
+                                onClick={() => handlePayNow(slot)}
+                                className="flex items-center gap-2 bg-[#D52B1E] hover:bg-red-700 text-white px-5 py-2 rounded text-xs font-bold uppercase tracking-widest transition-all shadow-lg hover:shadow-red-900/50"
+                             >
+                                <CreditCard size={14} /> Pay Now
+                             </button>
+                         )}
+                         
+                         {slot.status === 'pending' && (
+                             <span className="text-[10px] text-gray-500 uppercase tracking-widest">Waiting for Admin</span>
+                         )}
                       </div>
                     </div>
                   </div>
