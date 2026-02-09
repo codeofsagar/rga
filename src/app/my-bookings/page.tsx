@@ -18,6 +18,7 @@ interface MyBooking {
   startTime: string;
   price: number;
   status: string; // e.g. 'pending', 'approved', 'paid'
+  type?: 'slot' | 'event'; // Added type
 }
 
 export default function MyBookings() {
@@ -48,24 +49,39 @@ export default function MyBookings() {
           const bookingPromises = querySnapshot.docs.map(async (bookingDoc) => {
             const bookingData = bookingDoc.data();
             const slotId = bookingData.slotId;
+            const type = bookingData.type || 'slot'; // Default to slot if missing
 
             if (!slotId) return null;
 
-            // Fetch details from the original slot (for date/time)
-            const slotSnap = await getDoc(doc(db, 'training_slots', slotId));
-            const slotData = slotSnap.exists() ? slotSnap.data() : {};
-
-            return {
-              id: bookingDoc.id, // The Booking ID
+            let finalData: Partial<MyBooking> = {
+              id: bookingDoc.id,
               slotId: slotId,
               bookedAt: bookingData.createdAt,
-              // Use booking data first (safer), fallback to slot data
-              packageName: bookingData.packageName || slotData.packageName || 'Unknown Package',
-              date: slotData.date || bookingData.trainingDate || 'Date TBD',
-              startTime: slotData.startTime || bookingData.trainingTime || 'Time TBD',
-              price: bookingData.price || slotData.price || 0,
-              status: bookingData.status || 'pending'
-            } as MyBooking;
+              price: bookingData.price,
+              status: bookingData.status || 'pending',
+              type: type,
+              packageName: bookingData.packageName
+            };
+
+            // IF EVENT, we trust the booking data (snapshot) or fetch event if needed
+            // But since we stored packageName/trainingDate in booking request API for events, we can use that.
+            if (type === 'event') {
+              finalData.date = bookingData.trainingDate || 'Date Range';
+              finalData.startTime = bookingData.trainingTime || 'All Day';
+            }
+            // IF SLOT, we fetch the slot to get the latest date/time (in case it changed?) 
+            // OR we can rely on what we stored if we start storing it there too. 
+            // Existing logic fetched slot. Let's keep fetching slot for backward compatibility.
+            else {
+              const slotSnap = await getDoc(doc(db, 'training_slots', slotId));
+              const slotData = slotSnap.exists() ? slotSnap.data() : {};
+              finalData.date = slotData.date || bookingData.trainingDate || 'Date TBD';
+              finalData.startTime = slotData.startTime || bookingData.trainingTime || 'Time TBD';
+              if (!finalData.packageName) finalData.packageName = slotData.packageName;
+              if (!finalData.price) finalData.price = slotData.price;
+            }
+
+            return finalData as MyBooking;
           });
 
           // Wait for all data to load
@@ -90,13 +106,14 @@ export default function MyBookings() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          bookingId: booking.id, // Critical: We send the Booking ID to update it to 'paid' later
+          bookingId: booking.id,
           slotId: booking.slotId,
           price: booking.price,
           packageName: booking.packageName,
           userId: user?.uid,
           customerEmail: user?.email,
-          customerName: user?.displayName
+          customerName: user?.displayName,
+          type: booking.type // Pass type to checkout
         })
       });
 

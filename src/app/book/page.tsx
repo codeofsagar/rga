@@ -15,10 +15,22 @@ interface TrainingSlot {
   packageName: string;
   price: number;
   status: string;
+  type?: 'slot' | 'event'; // Added type
+}
+
+interface EventCamp {
+  id: string;
+  title: string;
+  startDate: string;
+  endDate: string;
+  price: number;
+  status: string;
+  type?: 'event';
 }
 
 export default function BookSession() {
   const [allSlots, setAllSlots] = useState<TrainingSlot[]>([]);
+  const [allEvents, setAllEvents] = useState<EventCamp[]>([]);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [selectedPackageName, setSelectedPackageName] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<TrainingSlot | null>(null);
@@ -38,25 +50,43 @@ export default function BookSession() {
 
 
 
-  // 1. Fetch Slots (Admin & User)
+  // 1. Fetch Slots & Camps (Admin & User)
   useEffect(() => {
     if (!loading && !user) router.push('/login');
 
     if (user) {
-      const q = query(collection(db, "training_slots"), orderBy("date", "asc"));
-      const unsubscribe = onSnapshot(q, (snapshot) => {
+      // Fetch Slots
+      const qSlots = query(collection(db, "training_slots"), orderBy("date", "asc"));
+      const unsubscribeSlots = onSnapshot(qSlots, (snapshot) => {
         const now = new Date();
         const slotsData = snapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() } as TrainingSlot))
+          .map(doc => ({ id: doc.id, ...doc.data(), type: 'slot' } as TrainingSlot))
           .filter(slot => {
             const slotDate = new Date(`${slot.date}T${slot.startTime}`);
             return slotDate > now && slot.status === 'available';
           });
-
         setAllSlots(slotsData);
+      });
+
+      // Fetch Events (Camps)
+      const qEvents = query(collection(db, "events"), orderBy("startDate", "asc"));
+      const unsubscribeEvents = onSnapshot(qEvents, (snapshot) => {
+        const now = new Date();
+        const eventsData = snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data(), type: 'event' } as EventCamp)) // Use EventCamp type
+          // CASTING as any because currently EventCamp isn't fully defined in this scope yet, see below
+          .filter((event: any) => {
+            // Basic check if event is valid (future date or active status)
+            return event.status === 'active';
+          });
+        setAllEvents(eventsData);
         setIsLoading(false);
       });
-      return () => unsubscribe();
+
+      return () => {
+        unsubscribeSlots();
+        unsubscribeEvents();
+      };
     }
   }, [user, loading, router]);
 
@@ -71,6 +101,21 @@ export default function BookSession() {
     setSelectedPackageName(pkgName);
     setStep(2);
   };
+
+  const handleSelectEvent = (event: EventCamp) => {
+    setSelectedPackageName(event.title); // Treat title as package name
+    setSelectedSlot({
+      id: event.id,
+      date: `${event.startDate} - ${event.endDate}`,
+      startTime: 'All Day', // Or specific time if available
+      packageName: event.title,
+      price: event.price,
+      status: 'available',
+      type: 'event' // Important: Mark as event
+    });
+    setStep(3); // Skip date selection for camps, go straight to request
+  };
+
 
   const handleSelectSlot = (slot: TrainingSlot) => {
     setSelectedSlot(slot);
@@ -90,6 +135,7 @@ export default function BookSession() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           slotId: selectedSlot.id,
+          type: selectedSlot.type, // Send type (slot or event)
           customerName: name,
           customerEmail: email,
           customerPhone: phone,
@@ -112,8 +158,12 @@ export default function BookSession() {
   };
 
   const uniquePackages = Array.from(new Set(allSlots.map(s => s.packageName)));
-  const formatDate = (dateStr: string) => new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric' });
+  const formatDate = (dateStr: string) => {
+    if (dateStr.includes(' - ')) return dateStr; // For event ranges
+    return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric' });
+  };
   const formatTime = (time: string) => {
+    if (time === 'All Day') return time;
     const [h, m] = time.split(':');
     const hour = parseInt(h, 10);
     return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
@@ -128,7 +178,7 @@ export default function BookSession() {
         <h1 className="text-3xl font-black uppercase mb-4">Request Sent</h1>
         <p className="text-gray-400 max-w-md mb-8">
           Your request for <strong>{selectedSlot?.packageName}</strong> is now Pending. <br />
-          We will contact you to confirm the arena/location. Once approved, you can pay in your My Bookings tab.
+          We will contact you to confirm details. Once approved, you can pay in your My Bookings tab.
         </p>
         <button onClick={() => router.push('/my-bookings')} className="bg-white text-black px-8 py-3 rounded font-bold uppercase tracking-widest hover:bg-[#D52B1E] hover:text-white transition-all">Go to My Bookings</button>
       </div>
@@ -144,17 +194,33 @@ export default function BookSession() {
             <div className="w-2 h-2 bg-[#D52B1E] rounded-full animate-pulse shadow-[0_0_10px_#D52B1E]" />
             <span className="text-[10px] font-bold tracking-[0.2em] text-gray-400 uppercase">Live Schedule</span>
           </div>
-          <h1 className="text-3xl md:text-5xl font-black tracking-tighter uppercase">Request <span className="text-[#D52B1E]">Session</span></h1>
+          <h1 className="text-3xl md:text-5xl font-black tracking-tighter uppercase">Request <span className="text-[#D52B1E]">Session Or Camp</span></h1>
         </div>
 
         {/* STEP 1 */}
         {step === 1 && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-6">Step 1: Select Protocol</h2>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-6">Step 1: Select Protocol / Camp</h2>
             {isLoading ? <Loader className="animate-spin text-[#D52B1E]" /> : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {uniquePackages.length === 0 ? (
-                  <div className="col-span-2 text-gray-500 italic py-8 border border-white/10 p-8 rounded text-center">No upcoming slots found.</div>
+                {/* 1. EVENTS (CAMPS) LISTED FIRST OR MIXED */}
+                {allEvents.map((event) => (
+                  <button key={event.id} onClick={() => handleSelectEvent(event)} className="group p-8 bg-[#111] border border-white/10 hover:border-[#D52B1E] text-left transition-all rounded-xl relative overflow-hidden">
+                    <div className="absolute top-0 left-0 bg-[#D52B1E] text-white text-[10px] font-bold px-2 py-1 uppercase rounded-br-lg">Camp</div>
+                    <div className="flex justify-between items-start mb-4 mt-2">
+                      <div className="p-3 rounded-full bg-orange-500/10 text-orange-500">
+                        <Users size={24} />
+                      </div>
+                      <ArrowRight className="text-gray-600 group-hover:text-white transition-colors" />
+                    </div>
+                    <h3 className="text-2xl font-black uppercase text-white leading-none mb-2">{event.title}</h3>
+                    <p className="text-xs text-gray-400 font-mono mb-2">{event.startDate} - {event.endDate}</p>
+                    <p className="text-sm font-bold text-[#D52B1E]">${event.price}</p>
+                  </button>
+                ))}
+
+                {uniquePackages.length === 0 && allEvents.length === 0 ? (
+                  <div className="col-span-2 text-gray-500 italic py-8 border border-white/10 p-8 rounded text-center">No upcoming slots or camps found.</div>
                 ) : (
                   uniquePackages.map((pkgName) => (
                     <button key={pkgName} onClick={() => handleSelectPackage(pkgName)} className="group p-8 bg-[#111] border border-white/10 hover:border-[#D52B1E] text-left transition-all rounded-xl">

@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { adminDb } from '@/app/lib/firebaseAdmin'; 
+import { adminDb } from '@/app/lib/firebaseAdmin';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-11-17.clover', 
+  apiVersion: '2025-11-17.clover',
 });
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { bookingId, slotId, price, packageName, customerEmail, customerName, userId } = body;
+    const { bookingId, slotId, price, packageName, customerEmail, customerName, userId, type } = body; // Added type
 
     if (!bookingId || !price) {
       return NextResponse.json({ error: 'Missing payment details' }, { status: 400 });
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     const bookingSnap = await bookingRef.get();
 
     if (!bookingSnap.exists) {
-        return NextResponse.json({ error: 'Booking record not found.' }, { status: 404 });
+      return NextResponse.json({ error: 'Booking record not found.' }, { status: 404 });
     }
 
     const bookingData = bookingSnap.data()!;
@@ -28,14 +28,14 @@ export async function POST(req: NextRequest) {
     // 🚨 CRITICAL FIX: Only allow payment if status is 'approved'
     // We do NOT check if the slot is 'available' because it is already locked (requested) by this user.
     if (bookingData.status !== 'approved') {
-        return NextResponse.json({ error: 'This booking is not approved for payment yet.' }, { status: 403 });
+      return NextResponse.json({ error: 'This booking is not approved for payment yet.' }, { status: 403 });
     }
 
     // 2. Price Calculation (13% HST)
-    const BASE_PRICE = Number(price); 
+    const BASE_PRICE = Number(price);
     const HST_RATE = 0.13;
-    const TOTAL_AMOUNT = BASE_PRICE * (1 + HST_RATE); 
-    const UNIT_AMOUNT_CENTS = Math.round(TOTAL_AMOUNT * 100); 
+    const TOTAL_AMOUNT = BASE_PRICE * (1 + HST_RATE);
+    const UNIT_AMOUNT_CENTS = Math.round(TOTAL_AMOUNT * 100);
 
     // 3. Create Stripe Session
     const session = await stripe.checkout.sessions.create({
@@ -59,7 +59,8 @@ export async function POST(req: NextRequest) {
       metadata: {
         bookingId, // Pass Booking ID to Webhook
         slotId,
-        userId
+        userId,
+        type: type || 'slot' // Pass type
       },
       customer_email: customerEmail,
     });
